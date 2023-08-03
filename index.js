@@ -61,19 +61,6 @@ async function run() {
       res.send({token});
     })
 
-    // instructor
-    app.get('/instructor/myclass',  async (req, res) => {
-      const email = req.query.email;
-      // console.log(email);
-           if (!email) {
-        res.send([]);
-       
-      }
-    
-      const query = { email: email };
-      const result = await cartsCollection.find(query).toArray();
-      res.send(result);
-    });
 
 
     // user related api
@@ -126,6 +113,12 @@ async function run() {
       res.send(result);
     });
 
+    app.delete('/users/admin/:id', async(req,res)=>{
+      const id = req.params.id;
+      const query ={_id: new ObjectId(id)};
+      const result = await usersCollection.deleteOne(query);
+      res.send(result);
+    })
 
 
 
@@ -219,6 +212,16 @@ async function run() {
     app.post('/payment', async(req,res)=>{
       const newPayment = req.body;
       const result = await paymentsCollection.insertOne(newPayment);
+
+      const query = {_id: { $in: newPayment.ClassItem.map(id =>new ObjectId(id))}}
+      const deletedResult = await cartsCollection.deleteMany(query);
+
+      res.send({result, deletedResult});
+    })
+    app.delete('/carts/:id', async(req,res) =>{
+      const id = req.params.id;
+      const query ={_id: new ObjectId(id)};
+      const result = await cartsCollection.deleteOne(query);
       res.send(result);
     })
 
