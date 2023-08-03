@@ -2,15 +2,15 @@ const express = require('express');
 const app = express();
 const cors = require('cors')
 const jwt = require('jsonwebtoken');
-require('dotenv').config()
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
-const port = process.env.PORT || 5000;
+require('dotenv').config();
+const port = process.env.PORT || 5000; 
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY);
 
 app.use(cors())
 app.use(express.json());
 
 
-
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.d8yzbln.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -27,10 +27,10 @@ function verifyJWT(req, res, next) {
   if (!authorization) {
     return res.status(401).send({ error: true, message: 'unauthorized access' })
   }
-
   const token = authorization.split(' ')[1];
 
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    
     if (err) {
       console.log(err);
       return res.status(401).send({ error: true, message: 'unauthrized access' })
@@ -51,10 +51,32 @@ async function run() {
     const popularInstCollection = client.db("sportsDB").collection("popularInst");
     const classesCollection = client.db("sportsDB").collection("classes");
     const cartsCollection = client.db("sportsDB").collection("carts");
+    const paymentsCollection = client.db("sportsDB").collection("payments");
+
+
+    // jwt token
+    app.post('/jwt',(req,res)=>{
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET,{expiresIn:'1h'})
+      res.send({token});
+    })
+
+    // instructor
+    app.get('/instructor/myclass',  async (req, res) => {
+      const email = req.query.email;
+      // console.log(email);
+           if (!email) {
+        res.send([]);
+       
+      }
+    
+      const query = { email: email };
+      const result = await cartsCollection.find(query).toArray();
+      res.send(result);
+    });
+
 
     // user related api
-
-
     app.get('/users', async (req, res) => {
       const result = await usersCollection.find().toArray();
       res.send(result);
@@ -155,14 +177,48 @@ async function run() {
     })
 
     //**--carts related api---- */ 
-    app.get('/myCarts', async(req,res)=>{
-      const result = await cartsCollection.find().toArray();
+    app.get('/myCarts',  async (req, res) => {
+      const email = req.query.email;
+      // console.log(email);
+           if (!email) {
+        res.send([]);
+       
+      }
+    
+      const query = { email: email };
+      const result = await cartsCollection.find(query).toArray();
       res.send(result);
-    })
+    });
 
     app.post('/carts', async (req, res) => {
       const newCart = req.body;
       const result = await cartsCollection.insertOne(newCart);
+      res.send(result);
+    })
+
+    // cart payment api
+
+    app.post('/create-payment-intent',  async (req, res) => {
+      const { price } = req.body;
+    
+     if(price){
+      const amount = parseFloat(price) * 100
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: 'usd',
+        payment_method_types: ['card'],
+      })
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+     }
+
+     
+    });
+
+    app.post('/payment', async(req,res)=>{
+      const newPayment = req.body;
+      const result = await paymentsCollection.insertOne(newPayment);
       res.send(result);
     })
 
